@@ -27,7 +27,8 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 
 1. **OpenAI support**
 
-  Latest OpenAI LLMs, like *o1-preview* and *GPT-4o*, are accessible as creature's analytic backend with [OpenAI API key](https://help.openai.com/en/articles/4936850-where-do-i-find-my-openai-api-key). Note that for using *o1* family of LLMs, you need to be OpenAI [Tier5](https://platform.openai.com/docs/guides/rate-limits/usage-tiers?context=tier-one#usage-tiers) customer.
+  Latest OpenAI LLMs, like *o1-preview* and *GPT-4o*, are accessible as creature's analytic backend with [OpenAI API key](https://help.openai.com/en/articles/4936850-where-do-i-find-my-openai-api-key).  
+  **Note:** For using *o1* family of LLMs, you need to be OpenAI [Tier5](https://platform.openai.com/docs/guides/rate-limits/usage-tiers?context=tier-one#usage-tiers) customer.
 
 2. **HuggingFace support**
 
@@ -38,9 +39,22 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 <div align=center>
 <img src=./assets/img/llama_3.2_initial_state.jpg width="80%"/>
 </div>
-  The colony currently running by your basedAI creature feeds various data about its state through a web socket. The above is a screenshot of a page, which is present in this repository, showing how to display and use colony state data snapshot. It exposes the model, its token setting and framework, currently being used by the colony, as well as nice 3D visualization of the colony's network of cells (alongside with hover tooltips with current cellular state details) and a matrix-like console with flowing cell details.
+  The colony currently running by your basedAI creature feeds various data about its state through a web socket. The above is a screenshot of a [three.js](https://threejs.org/)-based web page, which is present in this repository, showing how to display and use colony state data snapshot. It exposes the model, its token setting and framework, currently being used by the colony, as well as nice 3D visualization of the colony's network of cells (alongside with hover tooltips with current cellular state details) and a matrix-like console with flowing cell details.
 
 ### Technical
+
+1. **Features**
+   - HuggingFace and OpenAI interfaces are copy of the OpenRouter interface, with adapted REST API calls and operational paramteres, expected from in the environment.
+   - Abstract API interface (enum), incorporating all 3 types of interfaces - OpenRouter, HuggingFace and OpenAI.
+   - Visualization page example, based on three.js 3D animations and GPT-4-derived The Matrix-like styling. Asynchronous websocket handling and visualization, keeping the colony cell states in a temporary storage.
+   - Debugging LLM I/O and IPC tracking (for race conditions and deadlocks debugging).
+   
+2. **Fixes**
+   - Demoted the colony *Mutex* to *RWLock*, to clamp the deadlock, plaguing the creature once its websocket is being connected.
+   - Replaced plan analysis *partial_cmp()* with *total_cmp()* to bypass malformed plans. **!!! Potential bug masking here !!!**
+   
+3. **Workarounds**
+   - Removed most of the data sending events from server.rs, such as initial event and the heartbeat, leaving only the snapshot. The reason behind this is inherent problem in the thought analysis architecture, which requires the whole colony object write-locked, which in turn locks the read access to it from the websocket.
 
 ## Prerequisites
 
