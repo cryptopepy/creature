@@ -63,7 +63,13 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 
 ## Prerequisites
 
-1. **Install Rust and Cargo**
+0. **Linux (Debian-clone - like Debian, Ubuntu, Kali, etc., including the ones installed under Windows WSL (Windows Sub-system Linux)) Installation**
+
+   ```bash
+   sudo apt-get update && sudo apt-get upgrade -y && sudo apt-get install -y pkg-config libssl-dev build-essential libc++-dev libc++abi-dev cargo clang
+   ```
+
+2. **Install Rust and Cargo**
 
    Rust is the primary language used in this project. Install Rust and its package manager Cargo:
 
@@ -73,16 +79,52 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 
    For more detailed instructions, refer to the [official Rust installation guide](https://www.rust-lang.org/tools/install).
 
-2. **Obtain an OpenRouter API Key**
+3. **Obtain an API Key**
+   
+   The system relies on API for language model interactions, such as thought generation, plan creation, memory compression, and context analysis.
+   
+   - **Using OpenRouter**
 
-   The system relies on the OpenRouter API for language model interactions such as thought generation, plan creation, memory compression, and context analysis. Sign up and obtain an API key from [OpenRouter](https://openrouter.ai/) and you can use crypto.
+     Sign up and obtain an API key from [OpenRouter](https://openrouter.ai/) and you can use crypto.
+     
+   - **Using OpenAI**  
 
-3. **Set Environment Variables**
+     Sign up and obtain an API key from [OpenAI](https://help.openai.com/en/articles/4936850-where-do-i-find-my-openai-api-key).
+     
+   - **Using HuggingFace**  
 
-   Set your API key in the environment variable:
+     Sign up and obtain an API key from [HuggingFace](https://www.geeksforgeeks.org/how-to-access-huggingface-api-key/). **You don't need an API key if you plan to run non-gated open-source models on your computer.**
+     
+4. **Set Environment Variables**
+
+   Set your API key for the framework you intend to use (that is - either OpenRouter, or OpenAI, or HuggingFace) in the environment variable (Note, that if you set up more than one framework API key, the framework choice will obey the priority order below):
+
+   - **OpenRouter**
 
    ```bash
    export OPENROUTER_API_KEY='your_openrouter_api_key_here'
+   ```
+   
+   - **OpenAI**
+
+   ```bash
+   export OPENAI_API_KEY='your_openai_api_key_here'
+   # Optionally, you can set the OpenAI model (the default is gpt-4o) and max tokens (default = 16384)
+   export OPENAI_MODEL='o1-preview'
+   # Max tokens will be ignored for o1 family of models
+   export OPENAI_MAX_TOKENS=8192
+   ```
+
+   - **HuggingFace**
+
+   ```bash
+   # If you plan to deploy a model locally, and if you will deploy only non-gated, open-source type of model, you can replace this key with 'hf_XXX'
+   export HF_API_KEY='your_huggingface_api_key_here'
+   # Optionally, you can set the HuggingFace model (the default is nvidia/Llama-3.1-Nemotron-70B-Instruct-HF) and max tokens (default = 128000)
+   export HF_MODEL='internlm/internlm2_5-20b-chat'
+   export HF_MAX_TOKENS=10000
+   # If you plan to deploy a model locally, set the base URL. Otherwise. DO NOT SET this environment variable in any circumstance
+   export HF_BASE_URL='http://localhost:23333'
    ```
 
    **Optional:** If you plan to use the Google Cloud Gemini model for advanced AI capabilities, set up your Google Cloud project and set the following environment variable:
@@ -93,13 +135,25 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 
    Ensure you have enabled the necessary APIs in your Google Cloud project and have proper authentication set up. Refer to the [Google Cloud documentation](https://cloud.google.com/docs/authentication) for guidance.
 
+5. **Optional: Install python, pip and lmdeploy for local HuggingFace Inference (model deployment on your own computer)**
+
+   If you plan to deploy HuggingFace models for creature's analytic backend via lmdeploy on your computer, you will need to install [python](https://realpython.com/installing-python/) and its package manager [pip](https://pip.pypa.io/en/stable/installation/).  
+   For Debian-clone Linux:
+   ```bash
+   sudo apt-get install -y python3
+   wget https://bootstrap.pypa.io/get-pip.py
+   python get-pip.py
+   # The following line applies to all the OSes
+   pip install lmdeploy
+   ```
+
 ## Installation
 
 1. **Clone the Repository**
 
    ```bash
    # Clone the repository
-   git clone https://github.com/yourusername/creature.git
+   git clone https://github.com/ctapnec/basedAI-Creature.git creature
    cd creature
    ```
 
@@ -112,6 +166,13 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 
    This compiles the project with optimizations, which is recommended for performance.
 
+3. **Optional: Run a HuggingFace model locally with lmdeploy**
+
+   The following is an example on how to locally deploy HuggingFace's internlm/internlm2_5-1_8b-chat model:
+   ```bash
+   lmdeploy serve api_server internlm/internlm2_5-1_8b-chat --model-name internlm/internlm2_5-1_8b-chat --server-port 23333
+   ```
+   
 ## Creation 
 
 Run the simulation with default settings:
