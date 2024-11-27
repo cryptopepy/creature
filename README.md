@@ -39,7 +39,8 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 <div align=center>
 <img src=./assets/img/llama_3.2_initial_state.jpg width="80%"/>
 </div>
-  The colony currently running by your basedAI creature feeds various data about its state through a web socket. The above is a screenshot of a [three.js](https://threejs.org/)-based web page, which is present in this repository, showing how to display and use colony state data snapshot. It exposes the model, its token setting and framework, currently being used by the colony, as well as nice 3D visualization of the colony's network of cells (alongside with hover tooltips with current cellular state details) and a matrix-like console with flowing cell details.
+  
+  The colony currently running by your basedAI creature feeds various data about its state through a web socket. The above is a screenshot of a [three.js](https://threejs.org/)-based web page, which is present in this repository, showing how to use and visualize colony state data snapshots. It exposes the model, its token setting and framework, currently being used by the colony, as well as nice 3D visualization of the colony's network of cells (alongside with hover tooltips with current cellular state details) and a matrix-like console with flowing cell details.
 
 ### Technical
 
@@ -51,10 +52,14 @@ A self-organizing framework that combines cellular automata, coherence, and lang
    
 2. **Fixes**
    - Demoted the colony *Mutex* to *RWLock*, to clamp the deadlock, plaguing the creature once its websocket is being connected.
-   - Replaced plan analysis *partial_cmp()* with *total_cmp()* to bypass malformed plans. **!!! Potential bug masking here !!!**
+   - Replaced *PlanAnalysis:analyze_plans()* best plan assessment *partial_cmp()* with *total_cmp()* to bypass malformed plans. **!!! Potential bug masking here !!!**
    
 3. **Workarounds**
    - Removed most of the data sending events from server.rs, such as initial event and the heartbeat, leaving only the snapshot. The reason behind this is inherent problem in the thought analysis architecture, which requires the whole colony object write-locked, which in turn locks the read access to it from the websocket.
+
+4. **TODO**
+   - Prompt partitioning and optimizations for different frameworks (that is - HuggingFace and OpenAI).
+   - Fix colony's thought process prolonged RWLock hold by applying IPC on smaller code granularity.
 
 ## Prerequisites
 
