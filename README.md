@@ -38,7 +38,7 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 <div align=center>
 <img src=./assets/img/llama_3.2_initial_state.jpg width="80%"/>
 </div>
-  The colony currently running by your basedAI creature exposes various data about its state. This is an example page of how to display and use colony state data snapshot. It exposes the model, its token setting and framework currently being used by the colony, as well as nice 3D visualization of the colony's network of cells (alongside with hover tooltips with current cellular state details) and a matrix-like console with flowing cell details.
+  The colony currently running by your basedAI creature feeds various data about its state through a web socket. The above is a screenshot of a page, which is present in this repository, showing how to display and use colony state data snapshot. It exposes the model, its token setting and framework, currently being used by the colony, as well as nice 3D visualization of the colony's network of cells (alongside with hover tooltips with current cellular state details) and a matrix-like console with flowing cell details.
 
 ### Technical
 
