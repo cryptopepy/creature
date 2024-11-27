@@ -1,12 +1,31 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="icon" type="image/x-svg" href="https://cdn.worldvectorlogo.com/logos/huggingface-2.svg">
+    <link rel="icon" href="https://www.getbased.ai/favicon.ico" sizes="any"/>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Colony Visualization</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: #00efff; /* Ocean blue font */
+            position: relative;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('https://motionarray.imgix.net/1779720-wf7BUyFBs7-high_0003.jpg?w=660&q=60&fit=max&auto=format') no-repeat center center fixed;
+            background-size: cover;
+            filter: blur(8px); /* Blur effect */
+            z-index: -1; /* Place it behind the content */
+        }
         #tooltip {
             position: absolute;
             background: rgba(61, 61, 61, 0.7);
@@ -16,6 +35,7 @@
             display: none;
             pointer-events: none;
             font-size: 12px;
+            text-align: left;
         }
         canvas {
             display: block;
@@ -39,6 +59,7 @@
             display: flex;
             flex-direction: column;
             justify-content: flex-start;
+            text-align: left;
         }
         .console-line {
             position: relative;
@@ -67,12 +88,14 @@
     </style>
 </head>
 <body>
-    <h1>BasedAI Creature's Cellular Colony</h1>
-    <h3 id="config">Model: --- &nbsp;&nbsp;&nbsp; Max Tokens: ---</h3>
-    <div id="container" style="width: 50%; height: 50vh; position: relative;">
-        <div id="tooltip"></div>
-    </div>
-    <div id="console">Waiting for data...</div>
+    <center>
+        <h1>BasedAI Creature's Cellular Colony</h1>
+        <h3 id="config">Model: --- &nbsp;&nbsp;&nbsp; Max Tokens: --- &nbsp;&nbsp;&nbsp; Cells: ---</h3>
+        <div id="container" style="width: 50%; height: 50vh; position: relative;">
+            <div id="tooltip"></div>
+        </div>
+        <div id="console">Waiting for data...</div>
+    </center>
     <script>
         const container = document.getElementById('container');
         const tooltip = document.getElementById('tooltip');
@@ -85,9 +108,9 @@
 
         // Set up Three.js scene
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth * 0.8 / window.innerHeight, 0.1, 1000);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth * 0.5 / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer();
-        renderer.setSize(window.innerWidth * 0.8, window.innerHeight * 0.6);
+        renderer.setSize(window.innerWidth * 0.5, window.innerHeight * 0.6);
         renderer.setClearColor(0x404050); // Hex color code for gray
         container.appendChild(renderer.domElement);
 
@@ -142,7 +165,7 @@
                 let sphere = spheres.get(id);
 
                 if (!sphere) {
-                    const geometry = new THREE.SphereGeometry(0.15 + /*neighbors*/ (dimensions.coherence / 25) * 0.15, 16, 16);
+                    const geometry = new THREE.SphereGeometry(0.15 + /*neighbors*/ (dimensions.efficiency / 25) * 0.15, 16, 16);
                     const material = new THREE.MeshPhongMaterial({ color: getColor(energy, dimensions), emissive: getColor(energy, dimensions) });
                     sphere = new THREE.Mesh(geometry, material);
                     sphere.userData = { id, energy, neighbors, dimensions };
@@ -235,9 +258,9 @@
                 if (data.model) {
                     _model = data.model;
                     if (data.framework) {
-                        document.getElementById('config').innerHTML = `Model: ${_model} (${data.framework}) &nbsp;&nbsp;&nbsp; Max Tokens: ${max_tokens_supplied ? _max_tokens : '---'}`;
+                        document.getElementById('config').innerHTML = `Model: ${_model} (${data.framework}) &nbsp;&nbsp;&nbsp; Max Tokens: ${max_tokens_supplied ? _max_tokens : '---'} &nbsp;&nbsp;&nbsp; Cells: ${(data.cells && Array.isArray(data.cells)) ? data.cells.length : '---'}`;
                     } else {
-                        document.getElementById('config').innerHTML = `Model: ${_model} &nbsp;&nbsp;&nbsp; Max Tokens: ${max_tokens_supplied ? _max_tokens : '---'}`;
+                        document.getElementById('config').innerHTML = `Model: ${_model} &nbsp;&nbsp;&nbsp; Max Tokens: ${max_tokens_supplied ? _max_tokens : '---'} &nbsp;&nbsp;&nbsp; Cells: ${(data.cells && Array.isArray(data.cells)) ? data.cells.length : '---'}`;
                     }
                 }
                 if (data.cells && Array.isArray(data.cells)) {
@@ -269,7 +292,7 @@
             event.preventDefault();
 
             mouse.x = (event.clientX / (window.innerWidth * 0.8)) * 2 - 1;
-            mouse.y = -(event.clientY / (window.innerHeight * 0.6)) * 2 + 1;
+            mouse.y = -(event.clientY / (window.innerHeight * 0.8)) * 2 + 1;
 
             raycaster.setFromCamera(mouse, camera);
 
