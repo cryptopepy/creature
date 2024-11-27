@@ -25,6 +25,21 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 
 ### Features
 
+1. **OpenAI support**
+
+  Latest OpenAI LLMs, like *o1-preview* and *GPT-4o*, are accessible as creature's analytic backend with [OpenAI API key](https://help.openai.com/en/articles/4936850-where-do-i-find-my-openai-api-key). Note that for using *o1* family of LLMs, you need to be OpenAI [Tier5](https://platform.openai.com/docs/guides/rate-limits/usage-tiers?context=tier-one#usage-tiers) customer.
+
+2. **HuggingFace support**
+
+  All text inference and text generation open-source models available in HuggingFace Inference are accessible as creature's analytic backend, both locally (via [lmdeploy](https://github.com/InternLM/lmdeploy)) and remotely (with [HuggingFace API key](https://www.geeksforgeeks.org/how-to-access-huggingface-api-key/)).
+
+3. **Visualization page example**
+
+<div align=center>
+<img src=./assets/img/llama_3.2_initial_state.jpg width="80%"/>
+</div>
+  The colony currently running by your basedAI creature exposes various data about its state. This is an example page of how to display and use colony state data snapshot. It exposes the model, its token setting and framework currently being used by the colony, as well as nice 3D visualization of the colony's network of cells (alongside with hover tooltips with current cellular state details) and a matrix-like console with flowing cell details.
+
 ### Technical
 
 ## Prerequisites
