@@ -22,7 +22,8 @@ ndarray = { version = "0.15", features = ["serde", "rayon"] }
 image = "0.24"
 colorgrad = "0.6"
 num-complex = { version = "0.4", features = ["serde"] }
-metal = "0.27"
+#metal = "0.27"
+wgpu = "0.14"
 rayon = "1.8"
 warp = "0.3"
 lazy_static = "1.5.0"

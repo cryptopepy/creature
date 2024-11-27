@@ -11,7 +11,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 use crate::models::types::{CellContext, Coordinates, DimensionalPosition, Plan, RealTimeContext, Thought};
 use crate::models::thought_io::{EventInput, EventOutput, ThoughtIO};
 use crate::models::constants::MAX_MEMORY_SIZE;
-use crate::api::openrouter::OpenRouterClient;
+//use crate::api::openrouter::OpenRouterClient;
+use crate::api::api::ApiClient;
 use crate::systems::ltl::{ExtendedNeighborhood, EnhancedCellState, InteractionEffect};
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
@@ -86,7 +87,7 @@ impl Cell {
 
     pub async fn update_with_ltl_rules(
         &mut self, 
-        api_client: &OpenRouterClient,
+        api_client: &ApiClient, // &OpenRouterClient,
         other_cells: &[(Uuid, Coordinates)]
     ) -> Result<(), Box<dyn Error>> {
         self.neighborhood.update_neighbors(&self.position, other_cells);
@@ -168,7 +169,7 @@ impl Cell {
 
     pub async fn generate_thought(
         &mut self,
-        api_client: &OpenRouterClient,
+        api_client: &ApiClient, //&OpenRouterClient,
         mission: &str,
     ) -> Result<(), Box<dyn std::error::Error>> {
         // First evaluate dimensional state
@@ -178,9 +179,14 @@ impl Cell {
             .take(5)
             .collect();
             
-        let (energy_impact, dopamine_impact) = api_client
+        /* let (energy_impact, dopamine_impact) = api_client
             .evaluate_dimensional_state(&self.dimensional_position, &recent_thoughts, &recent_plans)
-            .await?;
+            .await?; */
+        let (energy_impact, dopamine_impact) = match api_client {
+            ApiClient::HuggingFace(client) => client.evaluate_dimensional_state(&self.dimensional_position, &recent_thoughts, &recent_plans).await?,
+            ApiClient::OpenAI(client) => client.evaluate_dimensional_state(&self.dimensional_position, &recent_thoughts, &recent_plans).await?,
+            ApiClient::OpenRouter(client) => client.evaluate_dimensional_state(&self.dimensional_position, &recent_thoughts, &recent_plans).await?,
+        };
             
         // Apply impacts
         self.energy = (self.energy + energy_impact).clamp(0.0, 100.0);
@@ -203,11 +209,21 @@ impl Cell {
             .take(3)
             .map(|t| t.content.clone())
             .collect();
-        let real_time_context = api_client.gather_real_time_context(Some(recent_thought_contents)).await?;
+        //let real_time_context = api_client.gather_real_time_context(Some(recent_thought_contents)).await?;
+        let real_time_context = match api_client {
+            ApiClient::HuggingFace(client) => client.gather_real_time_context(Some(recent_thought_contents)).await?,
+            ApiClient::OpenAI(client) => client.gather_real_time_context(Some(recent_thought_contents)).await?,
+            ApiClient::OpenRouter(client) => client.gather_real_time_context(Some(recent_thought_contents)).await?,
+        };
         
-        let (thought_content, relevance_score, factors) = api_client
+        /* let (thought_content, relevance_score, factors) = api_client
             .generate_contextual_thought(&cell_context, &real_time_context, mission)
-            .await?;
+            .await?; */
+        let (thought_content, relevance_score, factors) = match api_client {
+            ApiClient::HuggingFace(client) => client.generate_contextual_thought(&cell_context, &real_time_context, mission).await?,
+            ApiClient::OpenAI(client) => client.generate_contextual_thought(&cell_context, &real_time_context, mission).await?,
+            ApiClient::OpenRouter(client) => client.generate_contextual_thought(&cell_context, &real_time_context, mission).await?,
+        };
 
         // Parse dimensional scores from thought content
         for line in thought_content.lines() {
@@ -371,7 +387,7 @@ Generated Thought:");
         Ok(())
     }
 
-    pub async fn check_and_compress_memories(&mut self, api_client: &OpenRouterClient) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn check_and_compress_memories(&mut self, api_client: &ApiClient /* &OpenRouterClient */) -> Result<(), Box<dyn std::error::Error>> {
         let total_size: usize = self.thoughts.iter().map(|t| t.content.len()).sum();
 
         if total_size > MAX_MEMORY_SIZE {
@@ -380,7 +396,12 @@ Generated Thought:");
                 .map(|t| t.content)
                 .collect();
 
-            let compressed = api_client.compress_memories(&thoughts_to_compress).await?;
+            //let compressed = api_client.compress_memories(&thoughts_to_compress).await?;
+            let compressed = match api_client {
+                ApiClient::HuggingFace(client) => client.compress_memories(&thoughts_to_compress).await?,
+                ApiClient::OpenAI(client) => client.compress_memories(&thoughts_to_compress).await?,
+                ApiClient::OpenRouter(client) => client.compress_memories(&thoughts_to_compress).await?,
+            };
             self.compressed_memories.push(compressed);
         }
 

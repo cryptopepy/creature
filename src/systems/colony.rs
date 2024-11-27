@@ -15,7 +15,8 @@ use std::path::Path;
 use std::collections::VecDeque;
 use crate::models::plan_analysis::{PlanAnalysis, save_plan_to_file};
 use crate::models::constants::{MAX_THOUGHTS_FOR_PLAN, NEIGHBOR_DISTANCE_THRESHOLD, BATCH_SIZE};
-use crate::api::openrouter::OpenRouterClient;
+//use crate::api::openrouter::OpenRouterClient;
+use crate::api::api::ApiClient;
 use crate::systems::cell::Cell;
 use std::collections::HashMap;
 use chrono::Utc;
@@ -25,7 +26,8 @@ use rand::{Rng, seq::SliceRandom};
 pub struct Colony {
     pub cells: HashMap<Uuid, Cell>,
     pub mission: String,
-    pub api_client: OpenRouterClient,
+    //pub api_client: OpenRouterClient,
+    pub api_client: ApiClient,
     pub cell_positions: HashMap<Uuid, Coordinates>,
     plan_leaderboard: HashMap<Uuid, (usize, usize)>, // (thought_count, unique_collaborations)
 }
@@ -46,7 +48,25 @@ impl Colony {
         log_info(&format!("Processing sub-batch of {} cells with {} sampled thoughts", 
             cell_ids.len(), sampled_thoughts.len()));
         
-        let _real_time_context = self.api_client.gather_real_time_context(Some(sampled_thoughts)).await?;
+        //let _real_time_context = self.api_client.gather_real_time_context(Some(sampled_thoughts)).await?;
+        /*
+        let _real_time_context = match self.api_client {
+            ApiClient::HuggingFace(client) => client.gather_real_time_context(Some(sampled_thoughts)).await?,
+            ApiClient::OpenRouter(client) => client.gather_real_time_context(Some(sampled_thoughts)).await?,
+        };
+        */
+        let _real_time_context = if let ApiClient::HuggingFace(client) = &self.api_client {
+            client.gather_real_time_context(Some(sampled_thoughts)).await?
+        } else if let ApiClient::OpenAI(client) = &self.api_client {
+            client.gather_real_time_context(Some(sampled_thoughts)).await?
+        } else if let ApiClient::OpenRouter(client) = &self.api_client {
+            client.gather_real_time_context(Some(sampled_thoughts)).await?
+        } else {
+            return Err(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "Unsupported ApiClient variant",
+            )));
+        };
         
         let mut success_count = 0;
         let mut error_count = 0;
@@ -105,7 +125,8 @@ impl Colony {
     }
 
 
-    pub fn new(mission: &str, api_client: OpenRouterClient) -> Self {
+    //pub fn new(mission: &str, api_client: OpenRouterClient) -> Self {
+    pub fn new(mission: &str, api_client: ApiClient) -> Self {
         Self {
             cells: HashMap::new(),
             mission: mission.to_string(),
@@ -249,7 +270,12 @@ impl Colony {
         println!("║   Start Time: {}", chrono::Local::now().format("%H:%M:%S.%3f"));
         println!("║   Status: Active");
         println!("║   Mode: Real-time Analysis");
-        let real_time_context = self.api_client.gather_real_time_context(None).await?;
+        //let real_time_context = self.api_client.gather_real_time_context(None).await?;
+        let real_time_context = match &self.api_client {
+            ApiClient::HuggingFace(client) => client.gather_real_time_context(None).await?,
+            ApiClient::OpenAI(client) => client.gather_real_time_context(None).await?,
+            ApiClient::OpenRouter(client) => client.gather_real_time_context(None).await?,
+        };
         println!("║ Context Analysis Complete:");
         println!("║   Time: {}", chrono::Local::now().format("%H:%M:%S.%3f"));
         println!("║   Market Trends: {} identified", real_time_context.market_trends.len());
@@ -326,10 +352,55 @@ impl Colony {
         
         println!("║ [{}] Generating thoughts...", 
             chrono::Local::now().format("%H:%M:%S"));
+        
+        /*
         let batch_results = match tokio::time::timeout(
             std::time::Duration::from_secs(300), // Reduced timeout
             self.api_client.generate_contextual_thoughts_batch(&cell_context_refs, &real_time_context, &self.mission, &[])
         ).await {
+            Ok(result) => match result {
+                Ok(batch) => batch,
+                Err(e) => {
+                    eprintln!("Error generating thoughts: {}", e);
+                    HashMap::new() // Return empty results on error
+                }
+            },
+            Err(_) => {
+                eprintln!("Thought generation timed out after 300 seconds");
+                HashMap::new()
+            }
+        };
+        */
+        let batch_results = match &self.api_client {
+            ApiClient::HuggingFace(client) => tokio::time::timeout(
+                std::time::Duration::from_secs(300),
+                client.generate_contextual_thoughts_batch(
+                    &cell_context_refs,
+                    &real_time_context,
+                    &self.mission,
+                    &[],
+                ),
+            ).await,
+            ApiClient::OpenAI(client) => tokio::time::timeout(
+                std::time::Duration::from_secs(300),
+                client.generate_contextual_thoughts_batch(
+                    &cell_context_refs,
+                    &real_time_context,
+                    &self.mission,
+                    &[],
+                ),
+            ).await,
+            ApiClient::OpenRouter(client) => tokio::time::timeout(
+                std::time::Duration::from_secs(300),
+                client.generate_contextual_thoughts_batch(
+                    &cell_context_refs,
+                    &real_time_context,
+                    &self.mission,
+                    &[],
+                ),
+            ).await,
+        };
+        let batch_results = match batch_results {
             Ok(result) => match result {
                 Ok(batch) => batch,
                 Err(e) => {
@@ -498,10 +569,42 @@ impl Colony {
                 combined_thoughts.truncate(MAX_THOUGHTS_FOR_PLAN);
 
                 println!("║ Creating plan for cell {} (timeout: 300s)...", cell_id);
+                /*
                 let plan_result = match tokio::time::timeout(
                     std::time::Duration::from_secs(300), // Reduced timeout
                     self.api_client.create_plan(&combined_thoughts)
                 ).await {
+                    Ok(result) => match result {
+                        Ok(plan) => {
+                            println!("║ Successfully created plan for cell {}", cell_id);
+                            plan
+                        },
+                        Err(e) => {
+                            eprintln!("║ Error creating plan for cell {}: {}", cell_id, e);
+                            continue; // Skip this cell on error
+                        }
+                    },
+                    Err(_) => {
+                        eprintln!("║ Plan creation timed out after 300 seconds for cell {}", cell_id);
+                        continue;
+                    }
+                };
+                */
+                let plan_result = match &self.api_client {
+                    ApiClient::HuggingFace(client) => tokio::time::timeout(
+                        std::time::Duration::from_secs(300),
+                        client.create_plan(&combined_thoughts),
+                    ).await,
+                    ApiClient::OpenAI(client) => tokio::time::timeout(
+                        std::time::Duration::from_secs(300),
+                        client.create_plan(&combined_thoughts),
+                    ).await,
+                    ApiClient::OpenRouter(client) => tokio::time::timeout(
+                        std::time::Duration::from_secs(300),
+                        client.create_plan(&combined_thoughts),
+                    ).await,
+                };
+                let plan_result = match plan_result {
                     Ok(result) => match result {
                         Ok(plan) => {
                             println!("║ Successfully created plan for cell {}", cell_id);
@@ -610,13 +713,34 @@ Analyzing technical context for best plan (score: {:.2})...", best_plan_score);
                 - Technical content only, no general news"#,
                 best_plan_narrative
             );
-
+            /*
             match self.api_client.query_llm(&news_query).await {
                 Ok(news) => println!("
 Relevant developments:
 {}", news),
                 Err(e) => eprintln!("Error querying for relevant news: {}", e),
             }
+            */
+            match &self.api_client {
+                ApiClient::HuggingFace(client) => match client.query_llm(&news_query).await {
+                    Ok(news) => println!("
+Relevant developments:
+{}", news),
+                    Err(e) => eprintln!("Error querying for relevant news: {}", e),
+                },
+                ApiClient::OpenAI(client) => match client.query_llm(&news_query).await {
+                    Ok(news) => println!("
+Relevant developments:
+{}", news),
+                    Err(e) => eprintln!("Error querying for relevant news: {}", e),
+                },
+                ApiClient::OpenRouter(client) => match client.query_llm(&news_query).await {
+                    Ok(news) => println!("
+Relevant developments:
+{}", news),
+                    Err(e) => eprintln!("Error querying for relevant news: {}", e),
+                },
+            };
         }
 
         // Save all plans to disk
