@@ -60,16 +60,18 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 4. **TODO**
    - Prompt partitioning and optimizations for different frameworks (that is - HuggingFace and OpenAI).
    - Fix colony's thought process prolonged RWLock hold by applying IPC on smaller code granularity.
+   - Code organization and structure - remove the induced spaghettification and apply modularization (for example - of all prompts).
 
 ## Prerequisites
 
-0. **Linux (Debian-clone - like Debian, Ubuntu, Kali, etc., including the ones installed under Windows WSL (Windows Sub-system Linux)) Installation**
-
+1. **Linux (Debian-clone - like Debian, Ubuntu, Kali, etc., including the ones installed under Windows WSL (Windows Sub-system Linux)) Installation**
+   
+   Update your system and install the required packages:
    ```bash
    sudo apt-get update && sudo apt-get upgrade -y && sudo apt-get install -y pkg-config libssl-dev build-essential libc++-dev libc++abi-dev cargo clang
    ```
 
-2. **Install Rust and Cargo**
+3. **Install Rust and Cargo**
 
    Rust is the primary language used in this project. Install Rust and its package manager Cargo:
 
@@ -79,7 +81,7 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 
    For more detailed instructions, refer to the [official Rust installation guide](https://www.rust-lang.org/tools/install).
 
-3. **Obtain an API Key**
+4. **Obtain an API Key**
    
    The system relies on API for language model interactions, such as thought generation, plan creation, memory compression, and context analysis.
    
@@ -95,17 +97,17 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 
      Sign up and obtain an API key from [HuggingFace](https://www.geeksforgeeks.org/how-to-access-huggingface-api-key/). **You don't need an API key if you plan to run non-gated open-source models on your computer.**
      
-4. **Set Environment Variables**
+5. **Set Environment Variables**
 
    Set your API key for the framework you intend to use (that is - either OpenRouter, or OpenAI, or HuggingFace) in the environment variable (Note, that if you set up more than one framework API key, the framework choice will obey the priority order below):
 
-   - **OpenRouter**
+   - **Using OpenRouter**
 
    ```bash
    export OPENROUTER_API_KEY='your_openrouter_api_key_here'
    ```
    
-   - **OpenAI**
+   - **Using OpenAI**
 
    ```bash
    export OPENAI_API_KEY='your_openai_api_key_here'
@@ -115,7 +117,7 @@ A self-organizing framework that combines cellular automata, coherence, and lang
    export OPENAI_MAX_TOKENS=8192
    ```
 
-   - **HuggingFace**
+   - **Using HuggingFace**
 
    ```bash
    # If you plan to deploy a model locally, and if you will deploy only non-gated, open-source type of model, you can replace this key with 'hf_XXX'
@@ -123,7 +125,7 @@ A self-organizing framework that combines cellular automata, coherence, and lang
    # Optionally, you can set the HuggingFace model (the default is nvidia/Llama-3.1-Nemotron-70B-Instruct-HF) and max tokens (default = 128000)
    export HF_MODEL='internlm/internlm2_5-20b-chat'
    export HF_MAX_TOKENS=10000
-   # If you plan to deploy a model locally, set the base URL. Otherwise. DO NOT SET this environment variable in any circumstance
+   # If you plan to deploy a model locally, set the base URL. Otherwise, DO NOT SET this environment variable in any circumstance
    export HF_BASE_URL='http://localhost:23333'
    ```
 
@@ -135,7 +137,7 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 
    Ensure you have enabled the necessary APIs in your Google Cloud project and have proper authentication set up. Refer to the [Google Cloud documentation](https://cloud.google.com/docs/authentication) for guidance.
 
-5. **Optional: Install python, pip and lmdeploy for local HuggingFace Inference (model deployment on your own computer)**
+6. **Optional: Install python, pip and lmdeploy for local HuggingFace Inference (model deployment on your own computer)**
 
    If you plan to deploy HuggingFace models for creature's analytic backend via lmdeploy on your computer, you will need to install [python](https://realpython.com/installing-python/) and its package manager [pip](https://pip.pypa.io/en/stable/installation/).  
    For Debian-clone Linux:
