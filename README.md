@@ -1,9 +1,11 @@
 # CREATURE - BasedAI - [Local Only, No Brains] - v0.2.1
+> This project is a fork of **CREATURE - BasedAI** (the <a href="https://github.com/getbasedai/creature">original repostitory</a>). The *[What's new?](#whats-new)* section in the **Table of Contents** describes what has been added, updated and fixed. The *[Prerequisites](#prerequisites)* and *[Installation](#installation)* sections are also updated accordingly.
 <img src="https://pbs.twimg.com/media/GcTMdVUXQAAmr24?format=jpg&name=4096x4096" alt="Image Description" width="500"/>
-A self-organizing framework that combines cellular automata, coherence, and language models to explore emergent collective intelligence through cells that think, plan, and evolve in a multi-dimensional space. In the BasedAI version, this joins a collective and would work for a specific Brain. 
+A self-organizing framework that combines cellular automata, coherence, and language models to explore emergent collective intelligence through cells that think, plan, and evolve in a multi-dimensional space. In the BasedAI version, this joins a collective and would work for a specific Brain.
 
 ## Table of Contents
 
+- [What's new?](#whats-new)
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Running the Creation](#creation)
@@ -18,6 +20,12 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 - [Data Analysis](#data-analysis)
 - [Contributing](#contributing)
 - [License](#license)
+
+## What's new?
+
+### Features
+
+### Technical
 
 ## Prerequisites
 
