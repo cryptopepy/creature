@@ -1489,16 +1489,16 @@ ENERGY: {}
                 }
 
                 // Parse thought sections and other components
-                if line.starts_with("**THOUGHT STRUCTURE:**") {
+                if line.starts_with("**THOUGHT STRUCTURE:**") || line.starts_with("THOUGHT STRUCTURE:") {
                     in_thought = true;
                     continue;
                 }
 
                 // Handle structured sections
-                if line.contains("**OBSERVATION**") || 
-                   line.contains("**ANALYSIS**") || 
-                   line.contains("**SYNTHESIS**") || 
-                   line.contains("**VISUALIZATION**") {
+                if line.contains("**OBSERVATION**") || line.contains("OBSERVATION:") ||
+                   line.contains("**ANALYSIS**") || line.contains("ANALYSIS:") ||
+                   line.contains("**SYNTHESIS**") || line.contains("SYNTHESIS:") ||
+                   line.contains("**VISUALIZATION**") || line.contains("VISUALIZATION:") {
                     if !thought_buffer.is_empty() {
                         thought_buffer.push('\n');
                     }
@@ -1507,7 +1507,7 @@ ENERGY: {}
                 }
 
                 // Capture bullet points and content
-                if line.starts_with("   - ") || line.starts_with("     - ") {
+                if line.starts_with("   - ") || line.starts_with("     - ") || line.starts_with("- ") {
                     if !thought_buffer.is_empty() {
                         thought_buffer.push('\n');
                     }
@@ -1516,7 +1516,7 @@ ENERGY: {}
                 }
 
                 // Capture the main thought content
-                if line.starts_with("**THOUGHT:**") {
+                if line.starts_with("**THOUGHT:**") || line.starts_with("THOUGHT:") {
                     in_thought = true;
                     continue;
                 }
@@ -1527,10 +1527,10 @@ ENERGY: {}
                    !line.contains("FACTORS:") {
                     // Handle numbered sections and their content
                     if line.starts_with(|c: char| c.is_digit(10)) || 
-                       line.starts_with("**OBSERVATION**") ||
-                       line.starts_with("**ANALYSIS**") ||
-                       line.starts_with("**SYNTHESIS**") ||
-                       line.starts_with("**VISUALIZATION**") {
+                       line.starts_with("**OBSERVATION**") || line.starts_with("OBSERVATION:") ||
+                       line.starts_with("**ANALYSIS**") || line.starts_with("ANALYSIS:") ||
+                       line.starts_with("**SYNTHESIS**") || line.starts_with("SYNTHESIS:") ||
+                       line.starts_with("**VISUALIZATION**") || line.starts_with("VISUALIZATION:") {
                         if !thought_buffer.is_empty() {
                             thought_buffer.push('\n');
                         }

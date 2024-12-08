@@ -61,6 +61,8 @@ impl Colony {
             client.gather_real_time_context(Some(sampled_thoughts)).await?
         } else if let ApiClient::OpenRouter(client) = &self.api_client {
             client.gather_real_time_context(Some(sampled_thoughts)).await?
+        } else if let ApiClient::Replicate(client) = &self.api_client {
+            client.gather_real_time_context(Some(sampled_thoughts)).await?
         } else {
             return Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::Other,
@@ -275,6 +277,7 @@ impl Colony {
             ApiClient::HuggingFace(client) => client.gather_real_time_context(None).await?,
             ApiClient::OpenAI(client) => client.gather_real_time_context(None).await?,
             ApiClient::OpenRouter(client) => client.gather_real_time_context(None).await?,
+            ApiClient::Replicate(client) => client.gather_real_time_context(None).await?,
         };
         println!("║ Context Analysis Complete:");
         println!("║   Time: {}", chrono::Local::now().format("%H:%M:%S.%3f"));
@@ -391,6 +394,15 @@ impl Colony {
                 ),
             ).await,
             ApiClient::OpenRouter(client) => tokio::time::timeout(
+                std::time::Duration::from_secs(300),
+                client.generate_contextual_thoughts_batch(
+                    &cell_context_refs,
+                    &real_time_context,
+                    &self.mission,
+                    &[],
+                ),
+            ).await,
+            ApiClient::Replicate(client) => tokio::time::timeout(
                 std::time::Duration::from_secs(300),
                 client.generate_contextual_thoughts_batch(
                     &cell_context_refs,
@@ -603,6 +615,10 @@ impl Colony {
                         std::time::Duration::from_secs(300),
                         client.create_plan(&combined_thoughts),
                     ).await,
+                    ApiClient::Replicate(client) => tokio::time::timeout(
+                        std::time::Duration::from_secs(300),
+                        client.create_plan(&combined_thoughts),
+                    ).await,
                 };
                 let plan_result = match plan_result {
                     Ok(result) => match result {
@@ -735,6 +751,12 @@ Relevant developments:
                     Err(e) => eprintln!("Error querying for relevant news: {}", e),
                 },
                 ApiClient::OpenRouter(client) => match client.query_llm(&news_query).await {
+                    Ok(news) => println!("
+Relevant developments:
+{}", news),
+                    Err(e) => eprintln!("Error querying for relevant news: {}", e),
+                },
+                ApiClient::Replicate(client) => match client.query_llm(&news_query).await {
                     Ok(news) => println!("
 Relevant developments:
 {}", news),

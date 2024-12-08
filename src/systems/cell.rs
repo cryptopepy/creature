@@ -186,6 +186,7 @@ impl Cell {
             ApiClient::HuggingFace(client) => client.evaluate_dimensional_state(&self.dimensional_position, &recent_thoughts, &recent_plans).await?,
             ApiClient::OpenAI(client) => client.evaluate_dimensional_state(&self.dimensional_position, &recent_thoughts, &recent_plans).await?,
             ApiClient::OpenRouter(client) => client.evaluate_dimensional_state(&self.dimensional_position, &recent_thoughts, &recent_plans).await?,
+            ApiClient::Replicate(client) => client.evaluate_dimensional_state(&self.dimensional_position, &recent_thoughts, &recent_plans).await?,
         };
             
         // Apply impacts
@@ -214,6 +215,7 @@ impl Cell {
             ApiClient::HuggingFace(client) => client.gather_real_time_context(Some(recent_thought_contents)).await?,
             ApiClient::OpenAI(client) => client.gather_real_time_context(Some(recent_thought_contents)).await?,
             ApiClient::OpenRouter(client) => client.gather_real_time_context(Some(recent_thought_contents)).await?,
+            ApiClient::Replicate(client) => client.gather_real_time_context(Some(recent_thought_contents)).await?,
         };
         
         /* let (thought_content, relevance_score, factors) = api_client
@@ -223,6 +225,7 @@ impl Cell {
             ApiClient::HuggingFace(client) => client.generate_contextual_thought(&cell_context, &real_time_context, mission).await?,
             ApiClient::OpenAI(client) => client.generate_contextual_thought(&cell_context, &real_time_context, mission).await?,
             ApiClient::OpenRouter(client) => client.generate_contextual_thought(&cell_context, &real_time_context, mission).await?,
+            ApiClient::Replicate(client) => client.generate_contextual_thought(&cell_context, &real_time_context, mission).await?,
         };
 
         // Parse dimensional scores from thought content
@@ -401,6 +404,7 @@ Generated Thought:");
                 ApiClient::HuggingFace(client) => client.compress_memories(&thoughts_to_compress).await?,
                 ApiClient::OpenAI(client) => client.compress_memories(&thoughts_to_compress).await?,
                 ApiClient::OpenRouter(client) => client.compress_memories(&thoughts_to_compress).await?,
+                ApiClient::Replicate(client) => client.compress_memories(&thoughts_to_compress).await?,
             };
             self.compressed_memories.push(compressed);
         }

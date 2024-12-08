@@ -10,3 +10,6 @@ target/
 eca_state.json
 log
 Cargo.lock
+XBot/
+XBot/node_modules
+XBot/package-lock.json

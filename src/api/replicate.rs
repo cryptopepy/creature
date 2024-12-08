@@ -11,6 +11,11 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use uuid::Uuid;
 
+// Get model name from std::env::var("REPLICATE_MODEL") or if not set, use the default model
+//static MODEL_IN_USE: &str = std::env::var("REPLICATE_MODEL").unwrap_or("meta/meta-llama-3-70b-instruct".to_string());
+// Get the tokens from std::env::var("HF_MAX_TOKENS") or if not set, use the default tokens
+//static MAX_TOKENS_FOR_MODEL: usize = std::env::var("HF_MAX_TOKENS").unwrap_or("128000".to_string()).parse().unwrap_or(6084);
+
 #[derive(Debug)]
 pub enum ClientError {
     LockError(String),
@@ -51,7 +56,7 @@ impl Default for ContextHistory {
     }
 }
 
-pub struct OpenAIClient {
+pub struct ReplicateClient {
     client: reqwest::Client,
     api_key: String,
     base_url: String,
@@ -60,10 +65,10 @@ pub struct OpenAIClient {
     knowledge_base: Arc<Mutex<Option<KnowledgeBase>>>,
 }
 
-impl OpenAIClient {
+impl ReplicateClient {
     pub fn new(api_key: String) -> Result<Self, Box<dyn std::error::Error>> {
         if api_key.trim().is_empty() {
-            return Err("OPENAI_API_KEY cannot be empty".into());
+            return Err("REPLICATE_API_KEY cannot be empty".into());
         }
 
         let client = reqwest::Client::builder()
@@ -74,7 +79,7 @@ impl OpenAIClient {
         Ok(Self {
             client,
             api_key,
-            base_url: "https://api.openai.com".to_string(),
+            base_url: "https://api.replicate.com/v1/models".to_string(),
             context_cache: Arc::new(Mutex::new(None)),
             context_history: Arc::new(Mutex::new(ContextHistory::default())),
             knowledge_base: Arc::new(Mutex::new(None)),
@@ -85,18 +90,9 @@ impl OpenAIClient {
         text.len() / 4
     }
 
-    fn get_MAX_TOKENS_FOR_MODEL(model: &str) -> usize {
-        std::env::var("OPENAI_MAX_TOKENS").unwrap_or("16384".to_string()).parse().unwrap_or(16384)
-        /*
-        match model {
-            _ => 6048,
-        }
-        */
-    }
-
     async fn get_trending_topics(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         //use crate::utils::logging::*;
-
+        
         let _rng = rand::thread_rng();
         
         // Rate limiting
@@ -113,21 +109,15 @@ impl OpenAIClient {
         
         LAST_REQUEST.store(now, std::sync::atomic::Ordering::Relaxed);
         
-        // Add timeout
-        let url = format!("{}/v1/chat/completions", self.base_url);
-        
-        // Retrieve the model name from the environment variable or default to "gpt-4o"
-        let model_name = std::env::var("OPENAI_MODEL").unwrap_or("gpt-4o".to_string());
-
-        // Check if the model name starts with "o1"
-        let o1_detected = model_name.starts_with("o1");
-
-        // Build the base JSON payload
-        let mut json_payload = serde_json::json!({
-            "model": model_name.clone(),
-            "messages": [{
-                "role": "user",
-                "content": r#"
+        let url = format!("{}/{}/predictions", self.base_url, std::env::var("REPLICATE_MODEL").unwrap_or("meta/meta-llama-3-70b-instruct".to_string()));
+        let request = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!({
+                    "input": {
+                        "prompt": r#"
                         Analyze technical developments from the last 72 hours across multiple domains.
                         Focus on posts from accounts with <0.01% following on technical platforms.
 
@@ -248,34 +238,55 @@ impl OpenAIClient {
                         Format as structured events with all required fields.
                         Prioritize technical depth over quantity.
                         "#
-            }]
-        });
+                    }
+            }));
 
-        // Conditionally add "temperature" and "max_tokens" if the model starts with "o1"
-        if !o1_detected {
-            json_payload["temperature"] = serde_json::json!(0.9);
-            json_payload["max_tokens"] = serde_json::json!(Self::get_MAX_TOKENS_FOR_MODEL(&model_name));
-        }
+        let response = request.send().await?;
+        let mut json: serde_json::Value = response.json().await?;
 
-        // Send the HTTP POST request
-        let response = tokio::time::timeout(
-            Duration::from_secs(30),
-            self.client
-                .post(&url)
+        // Extract the `id` field from the JSON response
+        let id = json["id"]
+            .as_str()
+            .ok_or("Missing 'id' field in JSON response")?;
+
+        // Polling URL using the extracted `id`
+        let polling_url = format!("https://api.replicate.com/v1/predictions/{}", id);
+
+        // Polling logic if `json["output"]` is null
+        while json["output"].is_null() || json["status"].as_str() == Some("processing") {
+            //log_info("Polling for output...");
+        
+            // Wait for 5 seconds before the next poll
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        
+            // Poll the specified URL
+            let poll_response = self
+                .client
+                .get(&polling_url)
                 .header("Authorization", format!("Bearer {}", self.api_key))
-                .header("Content-Type", "application/json")
-                .json(&json_payload)
                 .send()
-        ).await??;
-
-        let json: serde_json::Value = response.json().await?;
+                .await?;
+        
+            //log_info(&format!("Polling response: {:?}", poll_response));
+            json = poll_response.json().await?;
+            //log_info(&format!("Updated JSON: {:?}", json));
+        }
 
         //log_info(&format!("Trending topics response: {:?}", json));
 
-        let response_text = json["choices"][0]["message"]["content"]
-            .as_str()
-            .unwrap_or("")
-            .to_string();
+        let response_text = if let Some(array) = json["output"].as_array() {
+            // Convert array elements to strings and join them
+            array
+                .iter()
+                .filter_map(|v| v.as_str()) // Convert to &str if possible
+                .collect::<Vec<_>>() // Collect into a vector of &str
+                .join("") // Join the strings with no separator
+        } else {
+            // Default value in case "output" is not an array
+            String::from("")
+        };
+
+        //log_info(&format!("Trending topics response text: {:?}", response_text));
             
         // Parse and extract events with additional validation
         let mut events = Vec::new();
@@ -1371,52 +1382,64 @@ ENERGY: {}
     pub async fn query_llm(&self, prompt: &str) -> Result<String, Box<dyn std::error::Error>> {
         //use crate::utils::logging::*;
         
-        //let url = format!("{}/{}/v1/chat/completions", self.base_url, std::env::var("OPENAI_MODEL").unwrap_or("gpt-4o".to_string()));
-        let url = format!("{}/v1/chat/completions", self.base_url);
-
-        //log_info(&format!("Querying LLM with URL: {}", url));
-        
-        // Retrieve the model name from the environment variable or default to "gpt-4o"
-        let model_name = std::env::var("OPENAI_MODEL").unwrap_or("gpt-4o".to_string());
-
-        // Check if the model name starts with "o1"
-        let o1_detected = model_name.starts_with("o1");
-
-        // Build the base JSON payload
-        let mut json_payload = serde_json::json!({
-            "model": model_name.clone(),
-            "messages": [{
-                "role": "user",
-                "content": prompt
-            }]
-        });
-
-        // Conditionally add "temperature" and "max_tokens" if the model starts with "o1"
-        if !o1_detected {
-            json_payload["temperature"] = serde_json::json!(0.7);
-            json_payload["max_tokens"] = serde_json::json!(Self::get_MAX_TOKENS_FOR_MODEL(&model_name));
-        }
-
-        // Send the HTTP POST request
-        let response = self 
+        let url = format!("{}/{}/predictions", self.base_url, std::env::var("REPLICATE_MODEL").unwrap_or("meta/meta-llama-3-70b-instruct".to_string()));
+        let request = self
             .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json")
-            .json(&json_payload)
-            .send()
-            .await?;
+            .json(&serde_json::json!({
+                "input": {
+                    "prompt": prompt
+                }
+            }));
         
+        let response = request.send().await?;
         //log_info(&format!("LLM response: {:?}", response));
+        let mut json: serde_json::Value = response.json().await?;
 
-        let json: serde_json::Value = response.json().await?;
+        // Extract the `id` field from the JSON response
+        let id = json["id"]
+            .as_str()
+            .ok_or("Missing 'id' field in JSON response")?;
+
+        // Polling URL using the extracted `id`
+        let polling_url = format!("https://api.replicate.com/v1/predictions/{}", id);
+
+        // Polling logic if `json["output"]` is null
+        while json["output"].is_null() || json["status"].as_str() == Some("processing") {
+            //log_info("Polling for output...");
+        
+            // Wait for 5 seconds before the next poll
+            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        
+            // Poll the specified URL
+            let poll_response = self
+                .client
+                .get(&polling_url)
+                .header("Authorization", format!("Bearer {}", self.api_key))
+                .send()
+                .await?;
+        
+            //log_info(&format!("Polling response: {:?}", poll_response));
+            json = poll_response.json().await?;
+            //log_info(&format!("Updated JSON: {:?}", json));
+        }
 
         //log_info(&format!("LLM JSON: {:?}", json));
 
-        Ok(json["choices"][0]["message"]["content"]
-            .as_str()
-            .unwrap_or("")
-            .to_string())
+        Ok(
+            json["output"]
+                .as_array() // Ensure it's an array
+                .map(|array| {
+                    array
+                        .iter()
+                        .filter_map(|v| v.as_str()) // Convert each element to &str
+                        .collect::<Vec<_>>() // Collect the valid strings
+                        .join("") // Join the strings with no separator
+                })
+                .unwrap_or_else(|| "".to_string()), // Fallback if not an array
+        )
     }
 
     fn parse_context_response(

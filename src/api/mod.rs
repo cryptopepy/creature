@@ -11,4 +11,5 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 pub mod openrouter;
 pub mod huggingface;
 pub mod openai;
+pub mod replicate;
 pub mod api;

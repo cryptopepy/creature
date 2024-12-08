@@ -21,7 +21,8 @@ use crate::models::types::Coordinates;
 use crate::models::constants::{BATCH_SIZE, CELL_INIT_DELAY_MS, CYCLE_DELAY_MS};
 use crate::systems::colony::Colony;
 use rand::Rng;
-use std::time::Duration;
+//use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time;
 use tokio::signal::ctrl_c;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -97,12 +98,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let api_key = std::env::var("OPENROUTER_API_KEY")
         .or_else(|_| std::env::var("HF_API_KEY"))
         .or_else(|_| std::env::var("OPENAI_API_KEY"))
+        .or_else(|_| std::env::var("REPLICATE_API_KEY"))
         .map_err(|_| {
             let error_msg = "
     ╔════════════════════════════════════════════════════════════════╗
     ║                         ERROR                                  ║
     ║ OPENROUTER_API_KEY environment variable is not set             ║
     ║ HF_API_KEY environment variable is not set either              ║
+    ║ REPLICATE_API_KEY environment variable is not set either       ║
     ║                                                                ║
     ║ Please set it by running:                                      ║
     ║ export OPENROUTER_API_KEY='your-api-key'                       ║
@@ -110,6 +113,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ║ export HF_API_KEY='your-api-key'                               ║
     ║ OR, for OpenAI API key:                                        ║
     ║ export OPENAI_API_KEY='your-api-key'                           ║
+    ║ OR, for Replicate API key:                                     ║
+    ║ export REPLICATE_API_KEY='your-api-key'                        ║
     ║                                                                ║
     ║ You can get an API key from:                                   ║
     ║ https://openrouter.ai/keys                                     ║
@@ -118,10 +123,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ║ or OpenAI API key from:                                        ║
     ║ https://platform.openai.com/settings/profile/api-keys          ║
     ║ OR https://platform.openai.com/settings/organization/api-keys  ║
+    ║ OR Replicate API key from:                                     ║
+    ║ https://replicate.com/account/api-tokens                       ║
+    ║                                                                ║
     ╚════════════════════════════════════════════════════════════════╝
     ";
             eprintln!("{}", error_msg);
-            std::io::Error::new(std::io::ErrorKind::NotFound, "OPENROUTER_API_KEY or HF_API_KEY or OPENAI_API_KEY not set")
+            std::io::Error::new(std::io::ErrorKind::NotFound, "OPENROUTER_API_KEY or HF_API_KEY or OPENAI_API_KEY or REPLICATE_API_KEY not set")
         })?;
     // If std::env::var("HF_API_KEY"), print instructions about HF_MODEL and HF_MAX_TOKENS
     if std::env::var("HF_API_KEY").is_ok() {
@@ -138,6 +146,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             println!("Using OpenAI API with model: {}. You can set them with the environment variables OPENAI_MODEL", oai_model);
         }
+    } else if std::env::var("REPLICATE_API_KEY").is_ok() {
+        let rep_model = std::env::var("REPLICATE_MODEL").unwrap_or("meta/meta-llama-3-70b-instruct".to_string());
+        println!("Using Replicate API with model {}. You can set them with the environment variable REPLICATE_MODEL", rep_model);
     }
     /*
     let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
@@ -538,7 +549,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         //println!("Write lock acquired @10. Counter = {}", colony_wlocks);
         
         current_cycle += 1;
+        let mut _now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
+        println!("::[{:?}]:: Cycle {} complete. Waiting for {} seconds...", _now, current_cycle, CYCLE_DELAY_MS / 1000);
         time::sleep(Duration::from_millis(CYCLE_DELAY_MS)).await;
+        _now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
+        println!("::[{:?}]:: Cycle {} starting", _now, current_cycle + 1);
         
         // Spawn thinking animation task
         let animation_running = running.clone();
