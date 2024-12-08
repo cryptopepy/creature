@@ -142,7 +142,7 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 
    ```bash
    export REPLICATE_API_KEY='your_openai_api_key_here'
-   # Optionally, you can set the OpenAI model (the default is gpt-4o) and max tokens (default = 16384)
+   # Optionally, you can set the Replicate model (the default is meta/meta-llama-3-70b-instruct)
    export REPLICATE_MODEL='meta/meta-llama-3-70b-instruct'
    ```
 
