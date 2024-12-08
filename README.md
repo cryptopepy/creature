@@ -34,7 +34,11 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 
   All text inference and text generation open-source models available in HuggingFace Inference are accessible as creature's analytic backend, both locally (via [lmdeploy](https://github.com/InternLM/lmdeploy)) and remotely (with [HuggingFace API key](https://www.geeksforgeeks.org/how-to-access-huggingface-api-key/)).
 
-3. **Visualization page example**
+3. **Replicate support**
+
+  Text generation using models available in [Replicate](https://replicate.com/) is accessible as creature's analytic backend (with [Replicate API key]([https://www.geeksforgeeks.org/how-to-access-huggingface-api-key/](https://replicate.com/account/api-tokens))).
+
+4. **Visualization page example**
 
 <div align=center>
 <img src=./assets/img/llama_3.2_initial_state.jpg width="80%"/>
@@ -45,7 +49,7 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 ### Technical
 
 1. **Features**
-   - HuggingFace and OpenAI interfaces are copy of the OpenRouter interface, with adapted REST API calls and operational paramteres, expected from in the environment.
+   - HuggingFace, Replicate and OpenAI interfaces are copy of the OpenRouter interface, with adapted REST API calls and operational paramteres, expected from in the environment.
    - Abstract API interface (enum), incorporating all 3 types of interfaces - OpenRouter, HuggingFace and OpenAI.
    - Visualization page example, based on three.js 3D animations and GPT-4-derived The Matrix-like styling. Asynchronous websocket handling and visualization, keeping the colony cell states in a temporary storage.
    - Debugging LLM I/O and IPC tracking (for race conditions and deadlocks debugging).
@@ -53,6 +57,7 @@ A self-organizing framework that combines cellular automata, coherence, and lang
 2. **Fixes**
    - Demoted the colony *Mutex* to *RWLock*, to clamp the deadlock, plaguing the creature once its websocket is being connected.
    - Replaced *PlanAnalysis:analyze_plans()* best plan assessment *partial_cmp()* with *total_cmp()* to bypass malformed plans. **!!! Potential bug masking here !!!**
+   - Text parsing thought components
    
 3. **Workarounds**
    - Removed most of the data sending events from server.rs, such as initial event and the heartbeat, leaving only the snapshot. The reason behind this is inherent problem in the thought analysis architecture, which requires the whole colony object write-locked, which in turn locks the read access to it from the websocket.
@@ -96,6 +101,10 @@ A self-organizing framework that combines cellular automata, coherence, and lang
    - **Using HuggingFace**  
 
      Sign up and obtain an API key from [HuggingFace](https://www.geeksforgeeks.org/how-to-access-huggingface-api-key/). **You don't need an API key if you plan to run non-gated open-source models on your computer.**
+   
+   - **Using Replicate**  
+
+     Sign up and obtain an API key from [Replicate](https://replicate.com/account/api-tokens).
      
 5. **Set Environment Variables**
 
@@ -127,6 +136,14 @@ A self-organizing framework that combines cellular automata, coherence, and lang
    export HF_MAX_TOKENS=10000
    # If you plan to deploy a model locally, set the base URL. Otherwise, DO NOT SET this environment variable in any circumstance
    export HF_BASE_URL='http://localhost:23333'
+   ```
+   
+   - **Using Replicate**
+
+   ```bash
+   export REPLICATE_API_KEY='your_openai_api_key_here'
+   # Optionally, you can set the OpenAI model (the default is gpt-4o) and max tokens (default = 16384)
+   export REPLICATE_MODEL='meta/meta-llama-3-70b-instruct'
    ```
 
    **Optional:** If you plan to use the Google Cloud Gemini model for advanced AI capabilities, set up your Google Cloud project and set the following environment variable:
