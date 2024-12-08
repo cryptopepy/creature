@@ -79,7 +79,7 @@ impl ReplicateClient {
         Ok(Self {
             client,
             api_key,
-            base_url: "https://api.replicate.com/v1/models".to_string(),
+            base_url: "https://api.replicate.com/v1".to_string(),
             context_cache: Arc::new(Mutex::new(None)),
             context_history: Arc::new(Mutex::new(ContextHistory::default())),
             knowledge_base: Arc::new(Mutex::new(None)),
@@ -91,7 +91,7 @@ impl ReplicateClient {
     }
 
     async fn get_trending_topics(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-        //use crate::utils::logging::*;
+        use crate::utils::logging::*;
         
         let _rng = rand::thread_rng();
         
@@ -109,14 +109,25 @@ impl ReplicateClient {
         
         LAST_REQUEST.store(now, std::sync::atomic::Ordering::Relaxed);
         
-        let url = format!("{}/{}/predictions", self.base_url, std::env::var("REPLICATE_MODEL").unwrap_or("meta/meta-llama-3-70b-instruct".to_string()));
-        let request = self
-            .client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&serde_json::json!({
-                    "input": {
+        let mut model_name = std::env::var("REPLICATE_MODEL").unwrap_or("meta/meta-llama-3-70b-instruct".to_string());
+        // If model_name contains ':', then after the ':' is the model version
+        let mut model_version = "".to_string();
+        if model_name.contains(':') {
+            let model_name_parts: Vec<&str> = model_name.split(':').collect();
+            let model_name_new = model_name_parts[0].to_string();
+            model_version = model_name_parts[1].to_string();
+            model_name = model_name_new;
+        };
+        
+        let url = if model_version.is_empty() {
+            format!("{}/models/{}/predictions", self.base_url, model_name)
+        } else {
+            format!("{}/predictions", self.base_url)
+        };
+        
+        // Build the base JSON payload
+        let mut json_payload = serde_json::json!({
+            "input": {
                         "prompt": r#"
                         Analyze technical developments from the last 72 hours across multiple domains.
                         Focus on posts from accounts with <0.01% following on technical platforms.
@@ -239,7 +250,18 @@ impl ReplicateClient {
                         Prioritize technical depth over quantity.
                         "#
                     }
-            }));
+        });
+
+        if !model_version.is_empty() {
+            json_payload["version"] = serde_json::json!(model_version);
+        }
+
+        let request = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(&serde_json::json!(&json_payload));
 
         let response = request.send().await?;
         let mut json: serde_json::Value = response.json().await?;
@@ -254,7 +276,7 @@ impl ReplicateClient {
 
         // Polling logic if `json["output"]` is null
         while json["output"].is_null() || json["status"].as_str() == Some("processing") {
-            //log_info("Polling for output...");
+            log_info("Polling for output...");
         
             // Wait for 5 seconds before the next poll
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
@@ -286,7 +308,7 @@ impl ReplicateClient {
             String::from("")
         };
 
-        //log_info(&format!("Trending topics response text: {:?}", response_text));
+        log_info(&format!("Trending topics response text: {:?}", response_text));
             
         // Parse and extract events with additional validation
         let mut events = Vec::new();
@@ -1382,18 +1404,39 @@ ENERGY: {}
     pub async fn query_llm(&self, prompt: &str) -> Result<String, Box<dyn std::error::Error>> {
         //use crate::utils::logging::*;
         
-        let url = format!("{}/{}/predictions", self.base_url, std::env::var("REPLICATE_MODEL").unwrap_or("meta/meta-llama-3-70b-instruct".to_string()));
+        let mut model_name = std::env::var("REPLICATE_MODEL").unwrap_or("meta/meta-llama-3-70b-instruct".to_string());
+        // If model_name contains ':', then after the ':' is the model version
+        let mut model_version = "".to_string();
+        if model_name.contains(':') {
+            let model_name_parts: Vec<&str> = model_name.split(':').collect();
+            let model_name_new = model_name_parts[0].to_string();
+            model_version = model_name_parts[1].to_string();
+            model_name = model_name_new;
+        };
+        
+        let url = if model_version.is_empty() {
+            format!("{}/models/{}/predictions", self.base_url, model_name)
+        } else {
+            format!("{}/predictions", self.base_url)
+        };
+
+        let mut json_payload = serde_json::json!({
+            "input": {
+                "prompt": prompt
+            }
+        });
+
+        if !model_version.is_empty() {
+            json_payload["version"] = serde_json::json!(model_version);
+        };
+
         let request = self
             .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
             .header("Content-Type", "application/json")
-            .json(&serde_json::json!({
-                "input": {
-                    "prompt": prompt
-                }
-            }));
-        
+            .json(&serde_json::json!(&json_payload));
+
         let response = request.send().await?;
         //log_info(&format!("LLM response: {:?}", response));
         let mut json: serde_json::Value = response.json().await?;
