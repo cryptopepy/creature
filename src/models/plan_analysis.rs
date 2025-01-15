@@ -44,8 +44,12 @@ impl PlanAnalysis {
             0.0
         };
 
+        //let best_plan = plans.iter()
+        //    .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+        // Replacing partial_cmp() with total_cmp() to avoid panic. !!! WARNING !!! - This could mask a bug.
+        // Also, total_cmp() treats Nan as the biggest value, so it might not be the best choice.
         let best_plan = plans.iter()
-            .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+            .max_by(|a, b| a.score.total_cmp(&b.score));
 
         Self {
             cycle_id: cycle_id.to_string(),

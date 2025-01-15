@@ -21,7 +21,8 @@ use crate::models::types::Coordinates;
 use crate::models::constants::{BATCH_SIZE, CELL_INIT_DELAY_MS, CYCLE_DELAY_MS};
 use crate::systems::colony::Colony;
 use rand::Rng;
-use std::time::Duration;
+//use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time;
 use tokio::signal::ctrl_c;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -29,6 +30,8 @@ use std::sync::Arc as StdArc;
 use futures::future;
 use serde_json::json;
 use tokio::sync::mpsc::{self, Sender};
+
+use tokio::sync::RwLock;
 
 use crate::utils::animations::{AnimationStyle, AnimationConfig, ThinkingAnimation};
 
@@ -91,6 +94,63 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         r.store(false, Ordering::SeqCst);
     });
 
+    // Get the OpenRouter API key from the environment. If it's not set, check for HuggingFace API key. If neither is set, print an error message.
+    let api_key = std::env::var("OPENROUTER_API_KEY")
+        .or_else(|_| std::env::var("HF_API_KEY"))
+        .or_else(|_| std::env::var("OPENAI_API_KEY"))
+        .or_else(|_| std::env::var("REPLICATE_API_KEY"))
+        .map_err(|_| {
+            let error_msg = "
+    ╔════════════════════════════════════════════════════════════════╗
+    ║                         ERROR                                  ║
+    ║ OPENROUTER_API_KEY environment variable is not set             ║
+    ║ HF_API_KEY environment variable is not set either              ║
+    ║ REPLICATE_API_KEY environment variable is not set either       ║
+    ║                                                                ║
+    ║ Please set it by running:                                      ║
+    ║ export OPENROUTER_API_KEY='your-api-key'                       ║
+    ║ OR, for HuggingFace API key:                                   ║
+    ║ export HF_API_KEY='your-api-key'                               ║
+    ║ OR, for OpenAI API key:                                        ║
+    ║ export OPENAI_API_KEY='your-api-key'                           ║
+    ║ OR, for Replicate API key:                                     ║
+    ║ export REPLICATE_API_KEY='your-api-key'                        ║
+    ║                                                                ║
+    ║ You can get an API key from:                                   ║
+    ║ https://openrouter.ai/keys                                     ║
+    ║ or HuggingFace API key from:                                   ║
+    ║ https://huggingface.co/login                                   ║
+    ║ or OpenAI API key from:                                        ║
+    ║ https://platform.openai.com/settings/profile/api-keys          ║
+    ║ OR https://platform.openai.com/settings/organization/api-keys  ║
+    ║ OR Replicate API key from:                                     ║
+    ║ https://replicate.com/account/api-tokens                       ║
+    ║                                                                ║
+    ╚════════════════════════════════════════════════════════════════╝
+    ";
+            eprintln!("{}", error_msg);
+            std::io::Error::new(std::io::ErrorKind::NotFound, "OPENROUTER_API_KEY or HF_API_KEY or OPENAI_API_KEY or REPLICATE_API_KEY not set")
+        })?;
+    // If std::env::var("HF_API_KEY"), print instructions about HF_MODEL and HF_MAX_TOKENS
+    if std::env::var("HF_API_KEY").is_ok() {
+        let hf_model = std::env::var("HF_MODEL").unwrap_or("nvidia/Llama-3.1-Nemotron-70B-Instruct-HF".to_string());
+        let hf_max_tokens = std::env::var("HF_MAX_TOKENS").unwrap_or("128000".to_string()).parse().unwrap_or(6048);
+        let hf_base_url = std::env::var("HF_BASE_URL").unwrap_or("https://api-inference.huggingface.co/models".to_string());
+        println!("Using HuggingFace API on Inference Endpoint: {} with model: {} and max tokens: {}. You can set them with the environment variables HF_BASE_URL, HF_MODEL and HF_MAX_TOKENS", hf_base_url, hf_model, hf_max_tokens);
+    } else if std::env::var("OPENAI_API_KEY").is_ok() {
+        let oai_model = std::env::var("OPENAI_MODEL").unwrap_or("gpt-4o".to_string());
+        let oai_max_tokens = std::env::var("OPENAI_MAX_TOKENS").unwrap_or("16384".to_string()).parse().unwrap_or(16384);
+        let o1_detected = oai_model.starts_with("o1");
+        if !o1_detected {
+            println!("Using OpenAI API with model: {} and max tokens: {}. You can set them with the environment variables OPENAI_MODEL and OPENAI_MAX_TOKENS", oai_model, oai_max_tokens);
+        } else {
+            println!("Using OpenAI API with model: {}. You can set them with the environment variables OPENAI_MODEL", oai_model);
+        }
+    } else if std::env::var("REPLICATE_API_KEY").is_ok() {
+        let rep_model = std::env::var("REPLICATE_MODEL").unwrap_or("meta/meta-llama-3-70b-instruct".to_string());
+        println!("Using Replicate API with model {}. You can set them with the environment variable REPLICATE_MODEL", rep_model);
+    }
+    /*
     let api_key = std::env::var("OPENROUTER_API_KEY").map_err(|_| {
         let error_msg = "
 ╔════════════════════════════════════════════════════════════════╗
@@ -107,6 +167,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("{}", error_msg);
         std::io::Error::new(std::io::ErrorKind::NotFound, "OPENROUTER_API_KEY not set")
     })?;
+    */
 
     let matches = App::new("Creature")
         .version("0.1.0")
@@ -148,9 +209,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         
     let colony_name = matches.value_of("name").unwrap_or("Unnamed");
     
-
+    // Chose the API client based on the API key prefix
+    let api_client = api::api::create_api_client(&api_key)?;
+    /*
     let api_client = api::openrouter::OpenRouterClient::new(api_key.clone())
         .map_err(|e| e as Box<dyn std::error::Error>)?;
+    */
+
     let mut colony = Colony::new(&mission, api_client);
 
     let state_file = matches.value_of("state").unwrap_or("eca_state.json");
@@ -172,8 +237,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let colony = Arc::new(Mutex::new(colony));
+    let mut colony_rlocks = 0;
+    let mut colony_wlocks = 0;
+    let colony = Arc::new(RwLock::new(colony));
     let colony_ws = Arc::clone(&colony);
+
+    //let colony = Arc::new(Mutex::new(colony));
+    //let colony_ws = Arc::clone(&colony);
 
     let shutdown_rx_ws = shutdown_tx.subscribe();
     tokio::spawn(async move {
@@ -232,12 +302,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 integration_score: 0.0,
             };
             
+            //println!("Attempting to acquire write lock @1. Counter = {}", colony_wlocks);
+            colony_wlocks += 1;
             let (cell_id, cell) = {
-                let mut colony_guard = colony.lock().unwrap();
+                //let mut colony_guard = colony.lock().unwrap();
+                let mut colony_guard = colony.write().await;
                 let id = colony_guard.add_cell(position.clone());
                 let cell = colony_guard.cells.get(&id).unwrap().clone();
                 (id, cell)
             };
+            colony_wlocks -= 1;
+            //println!("Write lock acquired @1. Counter = {}", colony_wlocks);
 
             let init_event = json!({
                 "type": "initialization",
@@ -282,8 +357,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     crate::utils::logging::print_banner(&mission, colony_name);
     'main: while current_cycle < simulation_cycles && running.load(Ordering::SeqCst) {
+        //println!("Attempting to acquire write lock @2. Counter = {}", colony_wlocks);
+        colony_wlocks += 1;
         let stats = {
-            let colony_guard = colony.lock().unwrap();
+            //let colony_guard = colony.lock().unwrap();
+            let mut colony_guard = colony.write().await;
             (
                 colony_guard.cells.len(),
                 colony_guard.get_average_energy(),
@@ -292,7 +370,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 colony_guard.get_mutation_rate(),
                 colony_guard.get_cluster_count()
             )
-        }; 
+        };
+        colony_wlocks -= 1;
+        //println!("Write lock acquired @2. Counter = {}", colony_wlocks);
 
             
         println!("Active cells: {}", stats.0);
@@ -302,11 +382,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Mutation rate: {:.1}%", stats.4 * 100.0);
         println!("Cluster count: {}", stats.5);
         
+        //println!("Attempting to acquire read lock @3. Counter = {}", colony_rlocks);
+        colony_rlocks += 1;
         let cell_ids: Vec<uuid::Uuid>;
         {
-            let colony_guard = colony.lock().unwrap();
+            //let colony_guard = colony.lock().unwrap();
+            let colony_guard = colony.read().await;
             cell_ids = colony_guard.cells.keys().copied().collect();
         }
+        colony_rlocks -= 1;
+        //println!("Read lock acquired @3. Counter = {}", colony_rlocks);
 
         for batch_idx in (0..cell_ids.len()).step_by(BATCH_SIZE) {
             if !running.load(Ordering::SeqCst) {
@@ -325,9 +410,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let batch_end = (batch_idx + BATCH_SIZE).min(cell_ids.len());
             let batch = cell_ids[batch_idx..batch_end].to_vec();
-            if let Err(e) = colony.lock().unwrap().process_cell_batch(&batch).await {
-                eprintln!("Error processing cell batch: {}", e);
+            //if let Err(e) = colony.lock().unwrap().process_cell_batch(&batch).await {
+            //println!("Attempting to acquire write lock @4. Counter = {}", colony_wlocks);
+            colony_wlocks += 1;
+            {
+                if let Err(e) = colony.write().await.process_cell_batch(&batch).await {
+                    eprintln!("Error processing cell batch: {}", e);
+                }
             }
+            colony_wlocks -= 1;
+            //println!("Write lock acquired @4. Counter = {}", colony_wlocks);
         }
         
         for batch_idx in (0..cell_ids.len()).step_by(BATCH_SIZE) {
@@ -350,9 +442,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
             plan_animation.run().await?;
 
-            if let Err(e) = colony.lock().unwrap().create_plans_batch(&batch, &current_cycle.to_string()).await {
-                eprintln!("Error creating plans batch: {}", e);
+            //if let Err(e) = colony.lock().unwrap().create_plans_batch(&batch, &current_cycle.to_string()).await {
+            //println!("Attempting to acquire write lock @5. Counter = {}", colony_wlocks);
+            colony_wlocks += 1;
+            {
+                if let Err(e) = colony.write().await.create_plans_batch(&batch, &current_cycle.to_string()).await {
+                    eprintln!("Error creating plans batch: {}", e);
+                }
             }
+            colony_wlocks -= 1;
+            //println!("Write lock acquired @5. Counter = {}", colony_wlocks);
                 
             println!("╚══════════════════════════════════════════════════════════╝");
         }
@@ -365,9 +464,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
         evolution_animation.run().await?;
 
-        if let Err(e) = colony.lock().unwrap().evolve_cells().await {
-            eprintln!("Error evolving cells: {}", e);
+        //if let Err(e) = colony.lock().unwrap().evolve_cells().await {
+        //println!("Attempting to acquire write lock @6. Counter = {}", colony_wlocks);
+        colony_wlocks += 1;
+        {
+            if let Err(e) = colony.write().await.evolve_cells().await {
+                eprintln!("Error evolving cells: {}", e);
+            }
         }
+        colony_wlocks -= 1;
+        //println!("Write lock acquired @6. Counter = {}", colony_wlocks);
 
         let reproduction_animation = ThinkingAnimation::new(AnimationConfig {
             style: AnimationStyle::Progress,
@@ -376,9 +482,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
         reproduction_animation.run().await?;
 
-        if let Err(e) = colony.lock().unwrap().handle_cell_reproduction().await {
-            eprintln!("Error handling cell reproduction: {}", e);
+        //if let Err(e) = colony.lock().unwrap().handle_cell_reproduction().await {
+        //println!("Attempting to acquire write lock @7. Counter = {}", colony_wlocks);
+        colony_wlocks += 1;
+        {
+            if let Err(e) = colony.write().await.handle_cell_reproduction().await {
+                eprintln!("Error handling cell reproduction: {}", e);
+            }
         }
+        colony_wlocks -= 1;
+        //println!("Write lock acquired @7. Counter = {}", colony_wlocks);
 
         let mission_animation = ThinkingAnimation::new(AnimationConfig {
             style: AnimationStyle::Spinner,
@@ -387,9 +500,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
         mission_animation.run().await?;
 
-        if let Err(e) = colony.lock().unwrap().update_mission_progress().await {
-            eprintln!("Error updating mission progress: {}", e);
+        //if let Err(e) = colony.lock().unwrap().update_mission_progress().await {
+        //println!("Attempting to acquire write lock @8. Counter = {}", colony_wlocks);
+        colony_wlocks += 1;
+        {
+            if let Err(e) = colony.write().await.update_mission_progress().await {
+                eprintln!("Error updating mission progress: {}", e);
+            }
         }
+        colony_wlocks -= 1;
+        //println!("Write lock acquired @8. Counter = {}", colony_wlocks);
         
         // Memory compression (every other cycle)
         if current_cycle % 2 == 0 {
@@ -400,13 +520,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             });
             compression_animation.run().await?;
 
-            if let Err(e) = colony.lock().unwrap().compress_colony_memories().await {
-                eprintln!("Error compressing colony memories: {}", e);
+            //if let Err(e) = colony.lock().unwrap().compress_colony_memories().await {
+            //println!("Attempting to acquire write lock @9. Counter = {}", colony_wlocks);
+            colony_wlocks += 1;
+            {
+                if let Err(e) = colony.write().await.compress_colony_memories().await {
+                    eprintln!("Error compressing colony memories: {}", e);
+                }
             }
+            colony_wlocks -= 1;
+            //println!("Write lock acquired @9. Counter = {}", colony_wlocks);
         }
         
+        //println!("Attempting to acquire write lock @10. Counter = {}", colony_wlocks);
+        colony_wlocks += 1;
         {
-            let mut colony_guard = colony.lock().unwrap();
+            //let mut colony_guard = colony.lock().unwrap();
+            let mut colony_guard = colony.write().await;
             colony_guard.print_cycle_statistics(current_cycle);
             if let Err(e) = colony_guard.save_state() {
                 eprintln!("Error saving state: {}", e);
@@ -415,9 +545,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             colony_guard.update_leaderboard();
             colony_guard.print_leaderboard();
         }
+        colony_wlocks -= 1;
+        //println!("Write lock acquired @10. Counter = {}", colony_wlocks);
         
         current_cycle += 1;
+        let mut _now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
+        println!("::[{:?}]:: Cycle {} complete. Waiting for {} seconds...", _now, current_cycle, CYCLE_DELAY_MS / 1000);
         time::sleep(Duration::from_millis(CYCLE_DELAY_MS)).await;
+        _now = SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards");
+        println!("::[{:?}]:: Cycle {} starting", _now, current_cycle + 1);
         
         // Spawn thinking animation task
         let animation_running = running.clone();
@@ -442,7 +578,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Simulation complete!");
     }
     
-    colony.lock().unwrap().print_statistics();
+    //colony.lock().unwrap().print_statistics();
+    //println!("Attempting to acquire read lock @11. Counter = {}", colony_rlocks);
+    colony_rlocks += 1;
+    {
+        colony.read().await.print_statistics();
+    }
+    colony_rlocks -= 1;
+    //println!("Read lock acquired @1. Counter = {}", colony_rlocks);
     
     let cleanup_animation = ThinkingAnimation::new(AnimationConfig {
         style: AnimationStyle::Progress,

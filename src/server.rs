@@ -18,8 +18,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::models::Thought;
 use crate::systems::colony::Colony;
 
+use tokio::sync::RwLock;
+
 pub async fn start_server(
-    colony_data: Arc<Mutex<Colony>>,
+    colony_data: Arc<RwLock<Colony>>, //Arc<Mutex<Colony>>,
     mut shutdown_signal: broadcast::Receiver<()>,
 ) {
     let colony_data_filter = warp::any().map(move || Arc::clone(&colony_data));
@@ -27,7 +29,8 @@ pub async fn start_server(
     let ws_route = warp::path("ws")
         .and(warp::ws())
         .and(colony_data_filter)
-        .map(|ws: warp::ws::Ws, colony_data| {
+        //.map(|ws: warp::ws::Ws, colony_data: Arc<Mutex<Colony>>| {
+        .map(|ws: warp::ws::Ws, colony_data: Arc<RwLock<Colony>>| {
             ws.on_upgrade(move |socket| handle_connection(socket, colony_data))
         });
 
@@ -153,7 +156,7 @@ async fn generate_heartbeat_from_data(data: HeartbeatData) -> serde_json::Value 
 
 async fn handle_connection(
     ws: warp::ws::WebSocket,
-    colony_data: Arc<Mutex<Colony>>,
+    colony_data: Arc<RwLock<Colony>>, //Arc<Mutex<Colony>>,
 ) {
     let (mut sender, mut _receiver) = ws.split();
 
@@ -162,6 +165,7 @@ async fn handle_connection(
     let mut update_interval = tokio::time::interval(tokio::time::Duration::from_secs(2));
     let mut heartbeat_interval = tokio::time::interval(tokio::time::Duration::from_millis(500));
 
+    /*
     // Send initial snapshot
     let initial_snapshot = {
         let colony = colony_data.lock().unwrap();
@@ -255,14 +259,39 @@ async fn handle_connection(
         eprintln!("Error sending initial snapshot: {}", e);
         return;
     }
+    */
 
     loop {
         tokio::select! {
             _ = snapshot_interval.tick() => {
                 let snapshot = {
-                    let colony = colony_data.lock().unwrap();
+                    //println!("(WS) >>> TO SEND: snapshot <<<");
+                    //let colony = colony_data.lock().unwrap();
+                    //println!("(WS) >>> Attempting to acquire read lock...");
+                    let colony = colony_data.read().await;
+                    //println!("(WS) >>> Read lock acquired.");
+                    //println!("(WS) >>> DATA Unlocked <<<");
+                    let mut _model = "x-ai/grok-beta".to_string();
+                    let mut _max_tokens: usize = 120000;
+                    let mut _framework = "OpenRouter".to_string();
+                    if std::env::var("HF_API_KEY").is_ok() {
+                        _framework = "HuggingFace".to_string();
+                        _model = std::env::var("HF_MODEL").unwrap_or("nvidia/Llama-3.1-Nemotron-70B-Instruct-HF".to_string());
+                        _max_tokens = std::env::var("HF_MAX_TOKENS").unwrap_or("128000".to_string()).parse().unwrap_or(6048);
+                    } else if std::env::var("OPENAI_API_KEY").is_ok() {
+                        _framework = "OpenAI".to_string();
+                        _model = std::env::var("OPENAI_MODEL").unwrap_or("gpt-4o".to_string());
+                        _max_tokens = std::env::var("OPENAI_MAX_TOKENS").unwrap_or("16384".to_string()).parse().unwrap_or(16384);
+                        let o1_detected = _model.starts_with("o1");
+                        if o1_detected {
+                            _max_tokens = 32768;
+                        }
+                    }
                     json!({
                         "type": "snapshot",
+                        "model": &_model,
+                        "framework": &_framework,
+                        "max_tokens": _max_tokens,
                         "timestamp": SystemTime::now()
                             .duration_since(UNIX_EPOCH)
                             .unwrap_or_default()
@@ -342,11 +371,15 @@ async fn handle_connection(
                     })
                 };
 
+                println!("(WS) >>> Sending snapshot <<<");
                 if let Err(e) = sender.send(warp::ws::Message::text(serde_json::to_string(&snapshot).unwrap())).await {
-                    eprintln!("Error sending snapshot: {}", e);
+                    eprintln!("(WS) >>> Error sending snapshot: {}", e);
                     break;
+                } else {
+                    println!("(WS) >>> Snapshot sent <<<");
                 }
             }
+            /*
             _ = update_interval.tick() => {
                 let update_json = {
                     let colony = colony_data.lock().unwrap();
@@ -398,6 +431,7 @@ async fn handle_connection(
                     break;
                 }
             }
+            */
         }
     }
 }

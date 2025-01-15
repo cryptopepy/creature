@@ -4,3 +4,12 @@ rust/Cargo.lock
 rust/Cargo.toml
 /rust/target
 .DS_Store
+archive/
+data/
+target/
+eca_state.json
+log
+Cargo.lock
+XBot/
+XBot/node_modules
+XBot/package-lock.json

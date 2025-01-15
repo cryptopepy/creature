@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" href="https://www.getbased.ai/favicon.ico" sizes="any"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colony Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            color: #00efff; /* Ocean blue font */
+            position: relative;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('https://motionarray.imgix.net/1779720-wf7BUyFBs7-high_0003.jpg?w=660&q=60&fit=max&auto=format') no-repeat center center fixed;
+            background-size: cover;
+            filter: blur(8px); /* Blur effect */
+            z-index: -1; /* Place it behind the content */
+        }
+        #tooltip {
+            position: absolute;
+            background: rgba(61, 61, 61, 0.7);
+            color: #fff;
+            padding: 5px;
+            border-radius: 5px;
+            display: none;
+            pointer-events: none;
+            font-size: 12px;
+            text-align: left;
+        }
+        canvas {
+            display: block;
+        }
+        #console {
+            margin-top: 130px;
+            position: relative;
+            bottom: 20px;
+            left: 20px;
+            width: 800px;
+            height: 200px;
+            overflow: hidden; /* No scrolling; lines will flow naturally */
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #0f0;
+            background: linear-gradient(to bottom, #202020, #2e2e2e); /* Space gray gradient */
+            border: 2px solid #00cccc; /* Ocean-blueish border */
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 204, 204, 0.6); /* Glow effect */
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            text-align: left;
+        }
+        .console-line {
+            position: relative;
+            animation: scrollLine 5s linear infinite; /* Scroll each line */
+            background: linear-gradient(to right, #00ffd1, #00cccc, #00adff, #00ff52);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            opacity: 0;
+        }
+        @keyframes scrollLine {
+            0% {
+                transform: translateY(100%); /* Start below the console */
+                opacity: 0; /* Start invisible */
+            }
+            20% {
+                opacity: 1; /* Fade in */
+            }
+            80% {
+                opacity: 1; /* Stay visible */
+            }
+            100% {
+                transform: translateY(-100%); /* Scroll above the console */
+                opacity: 0; /* Fade out */
+            }
+        }
+    </style>
+</head>
+<body>
+    <center>
+        <h1>BasedAI Creature's Cellular Colony</h1>
+        <h3 id="config">Model: --- &nbsp;&nbsp;&nbsp; Max Tokens: --- &nbsp;&nbsp;&nbsp; Cells: ---</h3>
+        <div id="container" style="width: 50%; height: 50vh; position: relative;">
+            <div id="tooltip"></div>
+        </div>
+        <div id="console">Waiting for data...</div>
+    </center>
+    <script>
+        const container = document.getElementById('container');
+        const tooltip = document.getElementById('tooltip');
+        const consoleElement = document.getElementById('console');
+
+        let cells = [];
+        let cellIndex = 0;
+        let _model = 'x-ai/grok-beta';
+        let _max_tokens = 120000;
+
+        // Set up Three.js scene
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth * 0.5 / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth * 0.5, window.innerHeight * 0.6);
+        renderer.setClearColor(0x404050); // Hex color code for gray
+        container.appendChild(renderer.domElement);
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        const spheres = new Map();
+
+        // Add a point light
+        const light = new THREE.PointLight(0xffffff, 1, 100);
+        light.position.set(10, 10, 10);
+        scene.add(light);
+
+        camera.position.z = 15;
+
+        /*
+        "energy": cell.energy,
+        "dimensions": {
+            "emergence": cell.dimensional_position.emergence,
+            "coherence": cell.dimensional_position.coherence,
+            "resilience": cell.dimensional_position.resilience,
+            "intelligence": cell.dimensional_position.intelligence,
+            "efficiency": cell.dimensional_position.efficiency,
+            "integration": cell.dimensional_position.integration
+        },
+        */
+        // Update or add spheres for cells
+        function updateSphere(cell) {
+            try {
+                console.log(cell);
+                let { id, position, energy, neighbors, dimensions } = cell;
+                if (!id || !position || isNaN(position.x) || isNaN(neighbors) || isNaN(energy) || !dimensions) {
+                    if (!id) return console.error('!!! Invalid cell data !!! ==> ', cell);
+                    if (!position || isNaN(position.x)) {
+                        position = { x: 0, y: 0, z: 0, heat: 0 };
+                    }
+                    if (isNaN(neighbors)) neighbors = 0;
+                    if (isNaN(energy)) energy = 0;
+                    if (!dimensions) {
+                        dimensions = {
+                            emergence: 0,
+                            coherence: 0,
+                            resilience: 0,
+                            intelligence: 0,
+                            efficiency: 0,
+                            integration: 0
+                        };
+                    }
+                }
+                if (isNaN(position.heat)) {
+                    position.heat = 0;
+                }
+                let sphere = spheres.get(id);
+
+                if (!sphere) {
+                    const geometry = new THREE.SphereGeometry(0.15 + /*neighbors*/ (dimensions.efficiency / 25) * 0.15, 16, 16);
+                    const material = new THREE.MeshPhongMaterial({ color: getColor(energy, dimensions), emissive: getColor(energy, dimensions) });
+                    sphere = new THREE.Mesh(geometry, material);
+                    sphere.userData = { id, energy, neighbors, dimensions };
+                    scene.add(sphere);
+                    spheres.set(id, sphere);
+                }
+
+                sphere.position.set(position.x, position.y * 1.5, position.z);
+
+                return { id, position, energy, neighbors, dimensions };
+            } catch (err) {
+                console.error('Error updating sphere:', err);
+            }
+
+            return false;
+        }
+
+        // Calculate sphere color based on energy and other parameters
+        function getColor(energy, dimensions) {
+            const b = parseFloat(energy) / 100.0;
+            const g = parseFloat(dimensions.coherence) / 100.0;
+            const r = parseFloat(dimensions.intelligence) / 100.0;
+            return new THREE.Color(r, g, b);
+        }
+        function getEmission(energy, dimensions) {
+            const b = 1.0 - parseFloat(energy) / 100.0;
+            const g = parseFloat(dimensions.resilience) / 100.0;
+            const r = parseFloat(dimensions.integration) / 100.0;
+            return new THREE.Color(r, g, b);
+        }
+
+        function createLine(cell) {
+            const line = document.createElement("div");
+            line.className = "console-line";
+            line.textContent = `
+                Cell ID: ${cell.id}
+                Energy: ${cell.energy.toFixed(2)}
+                Neighbors: ${cell.neighbors}
+                Efficiency: ${(cell.dimensions.efficiency).toFixed(2)}
+                Integration: ${(cell.dimensions.integration).toFixed(2)}
+                Coherence: ${(cell.dimensions.coherence).toFixed(2)}
+                Emergence: ${(cell.dimensions.emergence).toFixed(2)}
+                Resilience: ${(cell.dimensions.resilience).toFixed(2)}
+                Intelligence: ${(cell.dimensions.intelligence).toFixed(2)}
+            `;
+            return line;
+        }
+
+
+        function startScrolling() {
+            let index = 0;
+            let neverDisplayed = true;
+
+            setInterval(() => {
+                if (cells.length === 0) return; // No cells to display
+                if (neverDisplayed) {
+                    consoleElement.innerHTML = ''; // Clear the console
+                    neverDisplayed = false;
+                }
+                // Create a new line for the current cell
+                const cell = cells[cellIndex % cells.length]; // Loop through the cells
+                const line = createLine(cell);
+
+                // Append the new line to the console
+                consoleElement.appendChild(line);
+
+                // Remove old lines to prevent overflow
+                if (consoleElement.childElementCount > 10) { // Limit to 10 visible lines
+                    consoleElement.removeChild(consoleElement.firstChild);
+                }
+
+                // Move to the next cell
+                cellIndex++;
+            }, 500); // Add a new line every second
+        }
+
+        startScrolling(); // Start the scrolling effect
+
+        // WebSocket to handle real-time data
+        const ws = new WebSocket('ws://localhost:3030/ws');
+
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                let max_tokens_supplied = false;
+                if (data.max_tokens) {
+                    _max_tokens = data.max_tokens;
+                    max_tokens_supplied = true;
+                }
+                if (data.model) {
+                    _model = data.model;
+                    if (data.framework) {
+                        document.getElementById('config').innerHTML = `Model: ${_model} (${data.framework}) &nbsp;&nbsp;&nbsp; Max Tokens: ${max_tokens_supplied ? _max_tokens : '---'} &nbsp;&nbsp;&nbsp; Cells: ${(data.cells && Array.isArray(data.cells)) ? data.cells.length : '---'}`;
+                    } else {
+                        document.getElementById('config').innerHTML = `Model: ${_model} &nbsp;&nbsp;&nbsp; Max Tokens: ${max_tokens_supplied ? _max_tokens : '---'} &nbsp;&nbsp;&nbsp; Cells: ${(data.cells && Array.isArray(data.cells)) ? data.cells.length : '---'}`;
+                    }
+                }
+                if (data.cells && Array.isArray(data.cells)) {
+                    data.cells.forEach(cell => {
+                        const updatedCell = updateSphere(cell);
+                        if (updatedCell) {
+                            cells.push(updatedCell);
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Error processing WebSocket message:', err);
+            }
+        };
+
+        // Heatmap material
+        const heatmapGeometry = new THREE.PlaneGeometry(16, 16, 16, 16);
+        const heatmapMaterial = new THREE.MeshBasicMaterial({
+            color: 0x888888,
+            wireframe: true,
+            opacity: 0.5,
+            transparent: true,
+        });
+        const heatmap = new THREE.Mesh(heatmapGeometry, heatmapMaterial);
+        scene.add(heatmap);
+
+        // Tooltip handling
+        function onMouseMove(event) {
+            event.preventDefault();
+
+            mouse.x = (event.clientX / (window.innerWidth * 0.8)) * 2 - 1;
+            mouse.y = -(event.clientY / (window.innerHeight * 0.8)) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+
+            const intersects = raycaster.intersectObjects(Array.from(spheres.values()));
+
+            if (intersects.length > 0) {
+                const intersected = intersects[0].object;
+                const { id, energy, neighbors, dimensions } = intersected.userData;
+
+                tooltip.style.display = 'block';
+                tooltip.style.left = `${event.clientX + 10}px`;
+                tooltip.style.top = `${event.clientY + 10}px`;
+                tooltip.innerHTML = `
+                    <strong>Cell ID:</strong> ${id}<br>
+                    <strong>Energy:</strong> ${energy.toFixed(2)}<br>
+                    <strong>Neighbors:</strong> ${neighbors}<br>
+                    <strong>Efficiency:</strong> ${(dimensions.efficiency).toFixed(2)}<br>
+                    <strong>Integration:</strong> ${(dimensions.integration).toFixed(2)}<br>
+                    <strong>Coherence:</strong> ${(dimensions.coherence).toFixed(2)}<br>
+                    <strong>Emergence:</strong> ${(dimensions.emergence).toFixed(2)}<br>
+                    <strong>Resilience:</strong> ${(dimensions.resilience).toFixed(2)}<br>
+                    <strong>Intelligence:</strong> ${(dimensions.intelligence).toFixed(2)}<br>
+                `;
+            } else {
+                tooltip.style.display = 'none';
+            }
+        }
+
+        container.addEventListener('mousemove', onMouseMove);
+
+        // Animation loop
+        const animate = function () {
+            requestAnimationFrame(animate);
+
+            scene.rotation.y += 0.001;
+            renderer.render(scene, camera);
+        };
+
+        animate();
+    </script>
+</body>
+</html>
