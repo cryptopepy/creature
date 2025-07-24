@@ -136,7 +136,7 @@ impl HuggingFaceClient {
             .post(&url)
             .header("Content-Type", "application/json")
             .json(&serde_json::json!({
-                    "model": std::env::var("HF_MODEL").unwrap_or("nvidia/Llama-3.1-Nemotron-70B-Instruct-HF".to_string()),
+                    "model": std::env::var("HF_MODEL").unwrap_or("gemma3:12b".to_string()),
                     "messages": [{
                         "role": "user",
                         "content": r#"
